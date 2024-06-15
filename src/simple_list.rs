@@ -25,6 +25,7 @@ impl Render for Main {
                         ListItem::new(format!("Item {}", model.count), "Subtitle".to_string());
                     model.items.push(new_item);
                     model.count += 1;
+                    cx.stop_propagation();
                     cx.notify();
                 });
             });
