@@ -65,6 +65,8 @@ impl Main {
                         div().child(item).into_any_element()
                     },
                 );
+
+                cx.notify();
             })
             .detach();
 

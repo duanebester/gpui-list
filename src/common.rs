@@ -48,10 +48,10 @@ pub fn setup_window(app_width: f64, app_height: f64, cx: &mut AppContext) -> Win
     let display_id_maybe = cx.displays().last().map(|d| d.id());
     let bounds_maybe = cx.displays().last().map(|d| d.bounds());
     let bounds = bounds_maybe.unwrap_or(Bounds {
-        origin: Point::new(GlobalPixels::from(0.0), GlobalPixels::from(0.0)),
+        origin: Point::new(px(0.0), px(0.0)),
         size: Size {
-            width: GlobalPixels::from(1920.0),
-            height: GlobalPixels::from(1080.0),
+            width: px(1920.0),
+            height: px(1080.0),
         },
     });
 
@@ -60,13 +60,13 @@ pub fn setup_window(app_width: f64, app_height: f64, cx: &mut AppContext) -> Win
 
     options.focus = true;
     options.display_id = display_id_maybe;
-    let width = GlobalPixels::from(app_width);
-    let height = GlobalPixels::from(app_height);
-    let x: GlobalPixels = center.x - width / 2.0;
-    let y: GlobalPixels = center.y - height / 2.0;
+    let width = px(app_width as f32);
+    let height = px(app_height as f32);
+    let x = center.x - width / 2.0;
+    let y = center.y - height / 2.0;
 
-    let bounds: Bounds<GlobalPixels> = Bounds::new(Point { x, y }, Size { width, height });
-    options.bounds = WindowBounds::Fixed(bounds);
+    let bounds = Bounds::new(Point { x, y }, Size { width, height });
+    options.window_bounds = Some(WindowBounds::Windowed(bounds));
     options.titlebar = Some(TitlebarOptions::default());
     options.is_movable = true;
     options.kind = WindowKind::PopUp;
