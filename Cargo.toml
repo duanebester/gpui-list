@@ -1,8 +1,32 @@
 [package]
 name = "gpui-list"
-version = "0.1.0"
-edition = "2021"
+version = "0.1.1"
+edition = "2024"
+default-run = "simple"
 
+[[bin]]
+name = "simple"
+path = "src/bin/simple.rs"
+
+[[bin]]
+name = "global"
+path = "src/bin/global.rs"
+
+[lib]
+name = "gpui_list"
+path = "src/lib.rs"
 
 [dependencies]
-gpui = { git = "https://github.com/zed-industries/zed" }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "83ca31055cf3e56aa8a704ac49e1686434f4e640" }
+
+[patch.crates-io]
+# Pin all core-* crates to the same git commit to ensure version consistency.
+# This fixes the core-graphics version conflict (0.24.0 vs 0.25.0) and core-foundation
+# conflicts that occur because core-text 21.1.0 on crates.io uses core-graphics 0.25.0,
+# but zed-font-kit uses 0.24.0. By patching all from the same commit, all crates use
+# compatible versions.
+core-text = { git = "https://github.com/servo/core-foundation-rs", rev = "b10f1efc48343fc5590127ec6d890ffbb8b5bd02" }
+core-graphics = { git = "https://github.com/servo/core-foundation-rs", rev = "b10f1efc48343fc5590127ec6d890ffbb8b5bd02" }
+core-graphics-types = { git = "https://github.com/servo/core-foundation-rs", rev = "b10f1efc48343fc5590127ec6d890ffbb8b5bd02" }
+core-foundation = { git = "https://github.com/servo/core-foundation-rs", rev = "b10f1efc48343fc5590127ec6d890ffbb8b5bd02" }
+core-foundation-sys = { git = "https://github.com/servo/core-foundation-rs", rev = "b10f1efc48343fc5590127ec6d890ffbb8b5bd02" }

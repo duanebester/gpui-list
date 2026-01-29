@@ -1,31 +1,31 @@
-use crate::common::{setup_window, ListItem, State, HEIGHT, WIDTH};
+use crate::common::{HEIGHT, ListItem, State, WIDTH, setup_window};
 use gpui::*;
 
 #[derive(Clone)]
 pub struct StateModel {
-    pub inner: Model<State>,
+    pub inner: Entity<State>,
 }
 
 impl StateModel {
-    pub fn init(cx: &mut WindowContext) {
-        let model = cx.new_model(|_cx| State {
+    pub fn init(app: &mut App) {
+        let model = app.new(|_cx| State {
             count: 0,
             items: vec![],
         });
         let this = Self { inner: model };
-        cx.set_global(this.clone());
+        app.set_global(this.clone());
     }
 
-    pub fn update(f: impl FnOnce(&mut Self, &mut WindowContext), cx: &mut WindowContext) {
-        if !cx.has_global::<Self>() {
+    pub fn update(f: impl FnOnce(&mut Self, &mut App), app: &mut App) {
+        if !app.has_global::<Self>() {
             return;
         }
-        cx.update_global::<Self, _>(|mut this, cx| {
+        app.update_global::<Self, _>(|mut this, cx| {
             f(&mut this, cx);
         });
     }
 
-    pub fn push(&self, item: ListItem, cx: &mut WindowContext) {
+    pub fn push(&self, item: ListItem, cx: &mut App) {
         self.inner.update(cx, |model, cx| {
             model.items.push(item.clone());
             model.count += 1;
@@ -40,37 +40,44 @@ pub struct List {
     state: ListState,
 }
 
+impl List {
+    fn render_entry(&mut self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
+        let state = cx.global::<StateModel>().inner.clone();
+        let items = state.read(cx).items.clone();
+        let item = items.get(ix).unwrap().clone();
+        div().child(item).into_any_element()
+    }
+}
+
 impl Render for List {
-    fn render(&mut self, _cx: &mut ViewContext<Self>) -> impl IntoElement {
-        div()
-            .size_full()
-            .flex()
-            .child(list(self.state.clone()).w_full().h_full())
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div().size_full().flex().child(
+            list(
+                self.state.clone(),
+                cx.processor(|this, ix, _window, cx| this.render_entry(ix, cx)),
+            )
+            .w_full()
+            .h_full(),
+        )
     }
 }
 
 impl List {
-    pub fn new(cx: &mut WindowContext) -> View<Self> {
-        cx.new_view(|cx| {
+    pub fn new(app: &mut App) -> Entity<Self> {
+        app.new(|cx| {
             let state = cx.global::<StateModel>().inner.clone();
-            cx.subscribe(&state, |this: &mut List, model, _event, cx| {
-                let items = model.read(cx).items.clone();
-                this.state = ListState::new(
-                    items.len(),
-                    ListAlignment::Bottom,
-                    Pixels(20.),
-                    move |idx, _cx| {
-                        let item = items.get(idx).unwrap().clone();
-                        div().child(item).into_any_element()
-                    },
-                );
-            })
+            cx.subscribe(
+                &state,
+                |this: &mut List, model, _event: &AddListItemEvent, cx| {
+                    let items = model.read(cx).items.clone();
+                    this.state = ListState::new(items.len(), ListAlignment::Bottom, px(20.));
+                    cx.notify();
+                },
+            )
             .detach();
 
             List {
-                state: ListState::new(0, ListAlignment::Bottom, Pixels(20.), move |_, _| {
-                    div().into_any_element()
-                }),
+                state: ListState::new(0, ListAlignment::Bottom, px(20.)),
             }
         })
     }
@@ -83,10 +90,49 @@ pub struct AddListItemEvent {
 
 impl EventEmitter<AddListItemEvent> for State {}
 
+pub struct Header {
+    count: usize,
+}
+
+impl Render for Header {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .id("header")
+            .flex()
+            .w_full()
+            .py_3()
+            .justify_center()
+            .items_center()
+            .border_b_1()
+            .border_color(rgb(0x3a3a3a))
+            .text_color(rgb(0xffffff))
+            .text_xl()
+            .child(format!("Total Items: {}", self.count))
+    }
+}
+
+impl Header {
+    pub fn new(app: &mut App) -> Entity<Self> {
+        app.new(|cx| {
+            let state = cx.global::<StateModel>().inner.clone();
+            cx.subscribe(
+                &state,
+                |this: &mut Header, model, _event: &AddListItemEvent, cx| {
+                    this.count = model.read(cx).items.len();
+                    cx.notify();
+                },
+            )
+            .detach();
+
+            Header { count: 0 }
+        })
+    }
+}
+
 pub struct Input;
 
 impl Render for Input {
-    fn render(&mut self, _cx: &mut ViewContext<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let button = div()
             .flex()
             .p_2()
@@ -97,17 +143,7 @@ impl Render for Input {
             .text_xl()
             .cursor(CursorStyle::PointingHand)
             .child("Add Item")
-            .on_mouse_down(MouseButton::Left, move |_mde, cx| {
-                StateModel::update(
-                    |this, cx| {
-                        let count = this.inner.read(cx).count;
-                        let item =
-                            ListItem::new(format!("Item {count}"), "Description".to_string());
-                        this.push(item, cx);
-                    },
-                    cx,
-                );
-            });
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_click));
 
         div()
             .flex()
@@ -120,42 +156,58 @@ impl Render for Input {
 }
 
 impl Input {
-    pub fn new(cx: &mut WindowContext) -> View<Self> {
-        cx.new_view(|_cx| Input)
+    pub fn new(app: &mut App) -> Entity<Self> {
+        app.new(|_cx| Input)
+    }
+
+    fn on_click(&mut self, _event: &MouseDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
+        StateModel::update(
+            |this, cx| {
+                let count = this.inner.read(cx).count;
+                let item = ListItem::new(count, format!("Item {count}"), "Description".to_string());
+                this.push(item, cx);
+            },
+            cx,
+        );
     }
 }
 
 pub struct Workspace {
-    pub list_view: View<List>,
-    pub input_view: View<Input>,
+    pub header_view: Entity<Header>,
+    pub list_view: Entity<List>,
+    pub input_view: Entity<Input>,
 }
 
 impl Render for Workspace {
-    fn render(&mut self, _cx: &mut ViewContext<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
             .flex()
             .flex_col()
+            .child(self.header_view.clone())
             .child(self.list_view.clone())
             .child(self.input_view.clone())
     }
 }
 
 impl Workspace {
-    pub fn new(cx: &mut WindowContext) -> View<Self> {
-        StateModel::init(cx);
-        let list_view = List::new(cx);
-        let input_view = Input::new(cx);
-        cx.new_view(|_cx| Workspace {
+    pub fn new(app: &mut App) -> Entity<Self> {
+        StateModel::init(app);
+        let header_view = Header::new(app);
+        let list_view = List::new(app);
+        let input_view = Input::new(app);
+        app.new(|_cx| Workspace {
+            header_view,
             list_view,
             input_view,
         })
     }
 }
 
-pub fn run_app(app: App) {
-    app.run(|cx: &mut AppContext| {
+pub fn run_app(app: Application) {
+    app.run(|cx: &mut App| {
         let window_options = setup_window(WIDTH, HEIGHT, cx);
-        cx.open_window(window_options, |cx| Workspace::new(cx));
+        cx.open_window(window_options, |_window, app| Workspace::new(app))
+            .unwrap();
     });
 }

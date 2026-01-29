@@ -5,13 +5,15 @@ pub static HEIGHT: f64 = 600.0;
 
 #[derive(Clone, Debug, IntoElement)]
 pub struct ListItem {
+    id: ElementId,
     title: SharedString,
     subtitle: SharedString,
 }
 
 impl RenderOnce for ListItem {
-    fn render(self, _cx: &mut WindowContext) -> impl IntoElement {
+    fn render(self, _window: &mut Window, _app: &mut App) -> impl IntoElement {
         div()
+            .id(self.id.clone())
             .flex()
             .flex_col()
             .bg(rgb(0x2a2a2a))
@@ -28,8 +30,9 @@ impl RenderOnce for ListItem {
 }
 
 impl ListItem {
-    pub fn new(title: String, subtitle: String) -> Self {
+    pub fn new(id: usize, title: String, subtitle: String) -> Self {
         ListItem {
+            id: ElementId::Name(format!("list-item-{}", id).into()),
             title: title.into(),
             subtitle: subtitle.into(),
         }
@@ -44,9 +47,9 @@ pub struct State {
 
 // Thanks again to Matthias for the inspiration here
 // https://github.com/MatthiasGrandl/Loungy
-pub fn setup_window(app_width: f64, app_height: f64, cx: &mut AppContext) -> WindowOptions {
-    let display_id_maybe = cx.displays().last().map(|d| d.id());
-    let bounds_maybe = cx.displays().last().map(|d| d.bounds());
+pub fn setup_window(app_width: f64, app_height: f64, app: &mut App) -> WindowOptions {
+    let display_id_maybe = app.displays().last().map(|d| d.id());
+    let bounds_maybe = app.displays().last().map(|d| d.bounds());
     let bounds = bounds_maybe.unwrap_or(Bounds {
         origin: Point::new(px(0.0), px(0.0)),
         size: Size {
